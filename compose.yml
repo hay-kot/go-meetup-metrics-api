@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  alloy:
+    image: grafana/alloy:latest
+    ports:
+      - "9090:9090" # Prometheus API port
+      - "3000:3000" # Grafana port
+      - "4317:4317" # OTLP gRPC port
+      - "4318:4318" # OTLP HTTP port
+    volumes:
+      - alloy-data:/var/lib/alloy
+      - ./alloy-config:/etc/alloy
+    environment:
+      - ALLOY_CONFIG_PATH=/etc/alloy/config.alloy
+    restart: unless-stopped
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  alloy-data:
+    driver: local
