@@ -9,9 +9,39 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	// Define Prometheus metrics
+	requestCounter = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "api_requests_total",
+			Help: "Total number of API requests",
+		},
+		[]string{"endpoint", "method"},
+	)
+
+	requestDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "api_request_duration_seconds",
+			Help:    "API request duration in seconds",
+			Buckets: prometheus.LinearBuckets(0.01, 0.05, 10), // 10 buckets from 0.01s to 0.5s
+		},
+		[]string{"endpoint"},
+	)
+
+	inFlightRequests = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "api_in_flight_requests",
+			Help: "Current number of in-flight requests",
+		},
+		[]string{"endpoint"},
+	)
 )
 
 func main() {
@@ -71,6 +101,10 @@ func handleEndpoint(name string) http.HandlerFunc {
 		// Prepare response
 		resp := Response{Endpoint: name}
 
+		// Observe request duration metric
+		duration := time.Since(startTime).Seconds()
+		requestDuration.WithLabelValues(name).Observe(duration)
+
 		// Set content type and encode response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -78,11 +112,5 @@ func handleEndpoint(name string) http.HandlerFunc {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		// Observe request duration metric
-		duration := time.Since(startTime).Seconds()
-		requestDuration.WithLabelValues(name).Observe(duration)
-
-		log.Info().Str("endpoint", name).Dur("response_time", waitTime).Float64("duration_seconds", duration).Msg("response sent")
 	}
 }

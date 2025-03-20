@@ -1,0 +1,27 @@
+prometheus.remote_write "grafanacloud" {
+  endpoint {
+    url = "<your-url>"
+
+    basic_auth {
+      username = "<your-username>"
+      password = "<your-password>"
+    }
+  }
+}
+
+discovery.relabel "metrics_integrations_integrations_go" {
+	targets = [{
+		__address__ = "api:8080",
+	}]
+
+	rule {
+		target_label = "instance"
+		replacement  = constants.hostname
+	}
+}
+
+prometheus.scrape "metrics_integrations_integrations_go" {
+	targets    = discovery.relabel.metrics_integrations_integrations_go.output
+	forward_to = [prometheus.remote_write.grafanacloud.receiver]
+	job_name   = "integrations/go"
+}
